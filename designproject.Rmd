@@ -1,0 +1,255 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+
+```{r}
+library(twitteR)
+library(ROAuth)
+library(tm)
+library(RCurl)
+install.packages("rtweet")
+library(rtweet)
+library(httpuv)
+
+### Alt satırdaki kodlarımız giriş yapmak istediğimiz hesabın keyleri
+
+consumerKey='ZQW50drBmWmtKsWXUNrbJBGsS'
+consumerSecret="D3vdxj791OiC6rBfiUu9WObmaP3O1FHiB5Au41Rjx5agrNBNaO"
+accessToken="569201432-6nJiSIgu7cZ3hnjuT6sg1a4qJp4m6cCOvcoYpeL9"
+accessTokenSecret="7t5Kup3WZbAgaj1hGlEA0TTH1sTPc3F1oy8Brt5I27qey"
+### Alt satırdaki kodlarımız ile hesaba erişim sağlıyoruz
+setup_twitter_oauth(consumerKey , consumerSecret , accessToken , accessTokenSecret)
+
+### Bu satır R üzerinden Tweet atmamızı sağlıyor.
+#####updateStatus("deneme 123")
+
+
+### Hashtag Verisini DataFrame çevirme. Türkiye'deki özel şehirkodlarına göre trendler
+
+library(tidyverse)
+availableTrendLocations() %>% filter(country == "Turkey")
+
+h <- getTrends(2343732)
+head(h , 20)
+ht <- searchTwitter("	Zlatan " , n = 200 )
+ht
+
+class(ht)
+df_ht <- twListToDF(ht)
+
+### Profil Tİmeline'dan veri çekme
+
+df_user <- userTimeline('@abdulkadiraltu7' , n=100 )
+df <- twListToDF(df_user)
+
+### Profil Temel Bİlgilerine Erişme
+
+tmb <- getUser("abdulkadiraltu7")
+attributes(tmb)
+str(tmb)
+tmb$id
+tmb$friendsCount
+tmb$followersCount
+tmb$created
+tmb$lastStatus$favoriteCount
+tmb$getFavorites(n=3)
+tmb$getFriends(n=10)
+
+### Temel bilgilerine eriştiğimiz Profilden Ulaştığımız Arkadaşımız
+sarkds <- getUser("emretoros")
+sarkds$id
+sarkds$friendsCount
+sarkds$followersCount
+sarkds$created
+sarkds$lastStatus$favoriteCount
+sarkds$getFavorites(n=3)
+sarkds$getFriends(n=10)
+
+```
+
+```{r}
+###Profil Enleri
+df_user <- userTimeline('@abdulkadiraltu7' , n=100 )
+df <- twListToDF(df_user)
+
+###Kullanıcın En beğenilen Tweetleri
+df %>% select(text , favoriteCount) %>%
+  arrange(desc(favoriteCount)) %>%
+  top_n(5) %>%
+  View()
+###Kullanıcın En çok retweet alan Tweetleri
+df %>% select(text , retweetCount) %>%
+  arrange(desc(retweetCount)) %>%
+  top_n(5) %>%
+  View()
+
+```
+
+```{r}
+###İstediğimiz hesabın favorileri ve retweetleri sayılarını ggplot kütüphanesi ile görselleştirme
+
+df_user <- userTimeline('@emretoros', n = 2000 )
+df <- twListToDF(df_user)
+c <- data.frame(fav = df$favoriteCount , ret = df$retweetCount)
+ggplot(data = c , aes(fav)) + geom_histogram()
+ggplot(data = c , aes(ret)) + geom_density()
+library(funModeling)
+profiling_num(c)
+
+
+```
+
+```{r}
+### İstediğimiz hesabın hangi saat ve gün aralığında ne kadar tweet attığını yine ggplot kütüphanesi ile görselleştirme
+df_user <- userTimeline('@GalatasaraySK', n = 2000 )
+df <- twListToDF(df_user)
+library(lubridate)
+
+hist(hour(df$created), col = "purple" , xlab = "Saat Aralığı" , ylab = "Tweet Sayısı" , xlim = c(0,25))
+
+gunisim <- wday(df$created , label = TRUE)
+
+ggplot(df , aes(gunisim)) + geom_bar()
+
+```
+
+```{r}
+### İstediğimiz hesabın tweetlerini hangi cihazlardan attığını pie kütüphanesi ile görselleştirme
+df_user <- userTimeline('@mserdark', n = 100 )
+df <- twListToDF(df_user)
+df$statusSource
+
+kaynaklar <- df$statusSource
+kaynaklar <- gsub("</a>" ," " , kaynaklar )
+kaynaklar <- strsplit(kaynaklar, ">")
+kaynaklar <- sapply(kaynaklar, function(x) x[2])
+kaynak_tablosu <- table(kaynaklar)
+
+pie(kaynak_tablosu , radius = 0.9 , border = 8 )
+
+```
+
+```{r}
+### İstediğimiz hesabın 5 takipçisinin favori oranı
+v <- getUser("@abdulkadiraltu7")
+takipciler <- v$getFollowers()
+df <-twListToDF(takipciler)
+View(takipciler)
+
+df %>%
+  filter(followersCount > friendsCount) %>%
+  mutate(popi_indeksi = friendsCount / followersCount) %>%
+  select(name , description , popi_indeksi) %>%
+  arrange(desc(popi_indeksi)) %>%
+  top_n(5)
+
+```
+
+```{r}
+
+### İstediğimiz hesabın takipçilerinin lokasyonlarının ggplot ile görselleştirmesi
+arkadaslar <- v$getFriends()
+df <- twListToDF(arkadaslar)
+df$location
+
+
+ggplot(df, aes(df$location)) + geom_bar()
+
+df$location <- sapply(df$location, function(x) ifelse(nchar(x) > 0, x, NA ))
+
+df <- df[!is.na(df$location),]
+
+
+ggplot(df, aes(location) ) + geom_bar()
+
+
+a <- df %>% group_by(location) %>%
+  summarise(n = n())
+
+b <- a %>% filter(n > mean(a$n))
+
+ggplot(b, aes(b$location) ) + geom_bar()
+```
+
+
+```{r}
+### İstediğimiz hesabın 10 kelime ile anlatmaya çalıştık
+df_user <- userTimeline('jeandpardaillan', n = 2000)
+df <- twListToDF(df_user)
+
+
+doc.corpus <- Corpus(VectorSource(df$text))
+doc.corpus <- tm_map(doc.corpus, content_transformer(tolower))
+doc.corpus <- tm_map(doc.corpus, content_transformer(removePunctuation))
+doc.corpus <- tm_map(doc.corpus,content_transformer(removeNumbers))
+
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+myCorpus <- tm_map(doc.corpus, removeURL)
+myCorpus <- tm_map(myCorpus, stripWhitespace)
+tdm <- TermDocumentMatrix(myCorpus)
+findFreqTerms(tdm, lowfreq = 10)
+```
+
+
+```{r}
+### İstediğimiz hesabın arkadaşlarına bakarak kim olabileceği tahmininde bulunmaya çalıştık
+v <- getUser("emretoros")
+arkadaslar <- v$getFriends()
+df_jt <- twListToDF(arkadaslar)
+doc.corpus <- Corpus(VectorSource(df_jt$description))
+doc.corpus <- tm_map(doc.corpus, content_transformer(tolower))
+doc.corpus <- tm_map(doc.corpus, content_transformer(removePunctuation))
+doc.corpus <- tm_map(doc.corpus,content_transformer(removeNumbers))
+doc.corpus <- tm_map(doc.corpus, removeWords, stopwords("english"))
+removeURL <- function(x) gsub("http[[:alnum:]]*", "", x)
+myCorpus <- tm_map(doc.corpus, removeURL)
+library(SnowballC)
+doc.corpus <- tm_map(doc.corpus, stemDocument)
+myCorpus <- tm_map(myCorpus, stripWhitespace)
+
+
+
+tdm <- TermDocumentMatrix(myCorpus)
+
+findFreqTerms(tdm, lowfreq = 40)
+```
+
+```{r}
+trump <- searchTwitteR('trump' , n=1000 , lang = "en")
+save(trump , file = "trump.RData")
+length(trump)
+head(trump)
+trump.text <- sapply(trump, function(x) x$getText())
+mycorpus2 <- Corpus(VectorSource(trump.text))
+new_stops2 <- c(stopwords("en") , "donald" , "trump" , "amp" , "rt" , "JoeBiden")
+clean.corpus <- tm_map(mycorpus2 , PlainTextDocument)
+clean.corpus <- tm_map(clean.corpus , stripWhitespace)
+clean.corpus <- tm_map(clean.corpus , content_transformer(tolower))
+clean.corpus <- tm_map(clean.corpus , removeWords , new_stops2)
+clean.corpus <- tm_map(clean.corpus , content_transformer(removeNumbers))
+clean.corpus <- tm_map(clean.corpus , removePunctuation)
+trump_tdm <- TermDocumentMatrix(clean.corpus)
+trump_tdm
+trump_m <- as.matrix(trump_tdm)
+dim(trump_m)
+term.frequency <- rowSums(trump_m)
+term.frequency <- sort(term.frequency , decreasing = TRUE)
+term.frequency[1:10]
+install.packages("tm")  # for text mining
+install.packages("SnowballC") # for text stemming
+install.packages("wordcloud") # word-cloud generator 
+install.packages("RColorBrewer") # color palettes
+# Load
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+
+word.freqs <- data.frame(term.frequency , term = names(term.frequency) , num = term.frequency)
+
+wordcloud(word.freqs$term , word.freqs$num , max.words = 100 , colors = brewer.pal(11 , "RdYlBu") , random.color =TRUE)
+```
+
